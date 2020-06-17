@@ -5,15 +5,22 @@ Mais detalhes de nosso projeto pode ser encontrado em nossa página no DevPost: 
 
 ### Integrantes:
 André L. Caliari Costa
+
 Camila Pereira Perico
+
 Guilherme Taborda Ribas
+
 Leonardo Custódio
+
 Monique Schreiner
+
 Selma dos Santos C. de Andrade
 
 ### CONTATO
 Site dos discentes: https://www.bioinfodiscentes.com.br/
+
 Site oficial do programa de pós-graduação: http://www.bioinfo.ufpr.br/
+
 email: bioinfodiscentes@gmail.com
 
 
