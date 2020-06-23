@@ -227,10 +227,10 @@ def ToTrain(path,pathout,prefix,param):
             img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             # minmax normalization
             img = normalize(img) # PROBLEM CONVERT UINT8 TO FLOAT64...
-            # slidding window and vetorization
-            img = slidding(img,param.pool,param.szslidwin) 
             # contour mask/filter
             img = apply_mask(img, param.filtertype)
+            # slidding window and vetorization
+            img = slidding(img,param.pool,param.szslidwin) 
             # binarization
             X_mat[i,:] = img2_bin(img) # tamanho errado, seriam 32bits?            
             print('\r Processing '+str(((i+1)*100)/N)+'% completos...' )
