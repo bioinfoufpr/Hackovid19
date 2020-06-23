@@ -4,13 +4,13 @@ Somos a equipe Trekkers formada pelos alunos de mestrado em Bioinformática da U
 Mais detalhes de nosso projeto pode ser encontrado em nossa página no DevPost: https://devpost.com/software/teste-jnk5z4
 
 ### Integrantes:
-André L. Caliari Costa
-
 Camila Pereira Perico
 
 Guilherme Taborda Ribas
 
 Leonardo Custódio
+
+Mariane Gonçalves Kulik
 
 Monique Schreiner
 
