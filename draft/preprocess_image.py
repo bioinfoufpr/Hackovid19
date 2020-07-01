@@ -10,6 +10,7 @@ import cv2
 import numpy as np
 import os
 import time
+import hdf5storage
 
 
 def resize_image(path, size=250):
@@ -36,8 +37,21 @@ def img2_binvector(img, size=250):
     bin_vector = bin_vals.flatten(order='C')
     #np.savetxt("bins.csv", bin_vector, delimiter=",")
     return bin_vector
+
+def project_Xmat(X_mat, proj_file):
+    ''' Projects the Orthonormal Matrix in the images matrix to reduce dimensionality. '''
+    orthMat = hdf5storage.loadmat(proj_file)
+    idx_name = list(orthMat)[0]
+    orthMat = orthMat[idx_name].astype('float')
+    X_proj  = np.dot(X_mat,orthMat)
+    return X_proj
+
+def apply_transforms(img_path, size=250):
+    img = resize_image(img_path, size)
+    img = img2_binvector(img, size)
+    return img
             
-def set_X_y(path, y_val=[1,0,2], size=250):
+def from_folder(path, proj_path, size=250, y_val=[1,0,2]):
     '''Reads the parent folder to get the internal folders, process the images
     and generates the X and y numpy objects. '''
     paths = sorted([f.path for f in os.scandir(path) if f.is_dir()])
@@ -50,15 +64,23 @@ def set_X_y(path, y_val=[1,0,2], size=250):
         start_time = time.time()
         imgs = [f.path for f in os.scandir(folder) if f.is_file()]
         for img_path in imgs:
-            img = resize_image(img_path)
-            X_mat[i,:] = img2_binvector(img)
+            X_mat[i,:] = apply_transforms(img_path, size)
             i+=1
         tot_in_sec = time.time() - start_time
         print("--- {0} seconds - folder: {1} ---".format(str(tot_in_sec), os.path.basename(folder)))
+    X_mat = project_Xmat(X_mat, proj_path)
     return X_mat, y_mat
+
+def from_image(path, proj_path, size=250, y_val=[1,0,2]):
     
 
-filepath = '/home/datascience/Documents/IA_Wonders/hackcovid19/X-Ray Image DataSet/'
-X, y = set_X_y(filepath)
+
+if not('filepath' in locals() or 'projpath' in locals()):
+    filepath = input("Origin path: ")
+    projpath = input("Orthonormal Projection Matrix full path (folder+name+extension): ")
+X, y = set_X_y(filepath, projpath, size=10)
 #np.savez_compressed('tmp/Xy50', X=X, y=y)
-#loaded = np.load('tmp/Xy50.npz')
+#loaded = np.load('tmp/Xy1.npz')
+#loaded.files
+#X=loaded['arr_0']
+#y=loaded['arr_1']

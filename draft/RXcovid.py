@@ -7,6 +7,7 @@ import time
 import Augmentor
 #import glob
 import struct
+import hdf5storage
 
 laplacian = np.array((
         [0, 1, 0],
@@ -18,7 +19,6 @@ contour = np.array((
         [-1,  8, -1],
         [-1, -1, -1]), dtype="int")
 
-
 # construct the kernel bank, filter2D function
 kernelBank = (
         ("laplacian", laplacian),
@@ -26,15 +26,14 @@ kernelBank = (
 )
 
 
-
 class TransfParam:
-#    def __init__(self, nsample,szimg,'maxpool','contour'):
-    def __init__(self, nsample,szimg,pool,filtertype,szslidwin):
-        self.nsample = 2
-        self.szimg = 250
-        self.pool = 'maxpool'
-        self.filtertype = 'none'
-        self.szslidwin = 3
+    def __init__(self, nsample=2,szimg=250,pool='maxpool',filtertype='none',szslidwin=3,curr_datetime='None'):
+        self.nsample = nsample
+        self.szimg = szimg
+        self.pool = pool
+        self.filtertype = filtertype
+        self.szslidwin = szslidwin
+        self.curr_datetime = curr_datetime
 
 
 def normalize(inp):
@@ -46,26 +45,21 @@ def normalize(inp):
 def resize_image(path, size=250):
     '''Opens and reduces the image to a squared defined size. '''
     img = cv2.imread(path)
-    #height, width, depth = np.shape(img)
     img = cv2.resize(img,(size,size), interpolation=cv2.INTER_CUBIC)
     return img
+
 
 def img2_binvector(img, size=250):
     '''Read the image, convert each pixel to its binary representation and 
     transforms the image in a binary vector. '''
     bin_vals = np.zeros(shape=((size**2)*3, 8), dtype='uint8')
-    #bin_vals_lst = list()
     i=0
     for v3 in img.swapaxes(2,0).swapaxes(1,2):
         for v2 in np.nditer(v3.T.copy(order='C')):
-            #if (i%250)==0:
-            #    print(i, end=' ')
             bins = np.binary_repr(v2, width=8)
-            #bin_vals_lst.append(bins)
             bin_vals[i,:] = np.array(list(map(int, bins)))
             i+=1
     bin_vector = bin_vals.flatten(order='C')
-    #np.savetxt("bins.csv", bin_vector, delimiter=",")
     return bin_vector
 
 
@@ -78,28 +72,7 @@ def img2_bin(vec):
          aux = format(struct.unpack('!I', struct.pack('!f', k))[0], '032b')
          outvec[i:i+32] = [int(i) for i in str(aux)]
          i=i+32
-    return outvec
-
-def set_X_y(path, y_val=[1,0,2], size=250):
-    '''Reads the parent folder to get the internal folders, process the images
-    and generates the X and y numpy objects. '''
-    paths = sorted([f.path for f in os.scandir(path) if f.is_dir()])
-    lens_paths = [len([f.path for f in os.scandir(g) if f.is_file()]) for g in paths]
-    X_mat = np.zeros(shape=(sum(lens_paths), (size**2)*8*3), dtype='uint8')
-    y_mat = np.repeat(np.array(y_val), lens_paths)
-    i=0
-    for folder in paths:
-        print("--- Starting - folder: {0} ---".format(os.path.basename(folder)))
-        start_time = time.time()
-        imgs = [f.path for f in os.scandir(folder) if f.is_file()]
-        for img_path in imgs:
-            img = resize_image(img_path)
-            X_mat[i,:] = img2_binvector(img)
-            i+=1
-        tot_in_sec = time.time() - start_time
-        print("--- {0} seconds - folder: {1} ---".format(str(tot_in_sec), os.path.basename(folder)))
-    return X_mat, y_mat
-    
+    return outvec  
 
 #filepath = '/home/datascience/Documents/IA_Wonders/hackcovid19/X-Ray Image DataSet/'
 #X, y = set_X_y(filepath)
@@ -131,7 +104,7 @@ def apply_mask(image, kerneltype):
     output = np.zeros((iH, iW), dtype="float32") # create zeros matrix with image size
 
 
-    # JANELA DESLIZANTE
+    # SLIDIND WINDOW
     # loop over the input image, "sliding" the kernel across
     # each (x, y)-coordinate from left-to-right and top to
     # bottom
@@ -157,7 +130,7 @@ def augment(origin,output,nsample):
     '''receive a folder and a number of desired samples and create a set of 
     'augmented' images using some standard parameters. The Augmentor package 
     comes from an article published in the journal Bioinfromatics.'''
-    # Augmentation pagkage
+    # Augmentation pagkagepath
     # bibliography in: Bloice,etal,2019_Augmentor.pdf
     # and Augmentor_man.pdf
     #https://github.com/mdbloice/Augmentor
@@ -187,7 +160,6 @@ def slidding(image,typetransf,szwin):
         print('transformation type unrecognized')
         return image
     
-    
     # SLIDDING WINDOW
     k=0
     for x in range(0,(nL-szwin)):
@@ -198,53 +170,66 @@ def slidding(image,typetransf,szwin):
 
     return output
 
+def project_Xmat(X_mat, proj_file):
+    ''' Projects the Orthonormal Matrix in the images matrix to reduce dimensionality. '''
+    orthMat = hdf5storage.loadmat(proj_file)
+    idx_name = list(orthMat)[0]
+    orthMat = orthMat[idx_name].astype('float')
+    X_proj  = np.dot(X_mat,orthMat)
+    return X_proj
 
+def process_image(img_path,param):
+    '''Execute all preprocessing steps per image. This function can be called
+    to train the model and to production environment.'''
+    # resize the image to pattern
+    img = resize_image(img_path,param.szimg) 
+    # gray scale - just one color channel
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    # minmax normalization
+    img = normalize(img) # PROBLEM CONVERT UINT8 TO FLOAT64...
+    # contour mask/filter
+    img = apply_mask(img, param.filtertype)
+    # slidding window and vetorization
+    img = slidding(img,param.pool,param.szslidwin)
+    # binarization
+    img = img2_bin(img) # tamanho errado, seriam 32bits?
+    return img
 
-
-def ToTrain(path,pathout,prefix,param):
+def to_process(path,prefix,proj_path,param, y_val='None'):
+    '''Takes images by folder to get the correct class and generate the set 
+    to train the models. '''
+    y_mat = 'None'
+    if y_val != 'None':
+        paths = sorted([f.path for f in os.scandir(path) if f.is_dir()])
+        lens_paths = [len([f.path for f in os.scandir(g) if f.is_file()]) for g in paths]
+        N = sum(lens_paths)
+    #    X_mat = np.zeros(shape=(N, (param.szimg**2)*8*3), dtype='uint8')
+        X_mat = np.zeros(shape=(N, (param.szimg**2)*32), dtype='uint8')
+        y_mat = np.repeat(np.array(y_val), lens_paths)
+        # augmentation
+        #augment(path,path,param.nsample)
+        i=0
+        for folder in paths:
+            print("--- Starting - folder: {0} ---".format(os.path.basename(folder)))
+            start_time = time.time()
+            imgs = [f.path for f in os.scandir(folder) if f.is_file()]
+            
+            for img_path in imgs:
+                X_mat[i,:] = process_image(img_path, param)
+                print('\r Processing '+str(((i+1)*100)/N)+'% completos...' )
+                i+=1
     
-    # augmentation
-    augment(path,path,param.nsample)
+            tot_in_sec = time.time() - start_time
+            print("--- {0} seconds - folder: {1} ---".format(str(tot_in_sec), os.path.basename(folder)))
+    else:
+        X_mat = process_image(path, param)
     
-    y_val=[1,0,2]
+    # Projecting the quasi-Orthonormal matrix in our X to reduce dimensionality and abstraction
+    X_proj = project_Xmat(X_mat, proj_path)
     
-    paths = sorted([f.path for f in os.scandir(path) if f.is_dir()])
-    lens_paths = [len([f.path for f in os.scandir(g) if f.is_file()]) for g in paths]
-    N = sum(lens_paths)
-#    X_mat = np.zeros(shape=(N, (param.szimg**2)*8*3), dtype='uint8')
-    X_mat = np.zeros(shape=(N, (param.szimg**2)*32), dtype='uint8')
-    y_mat = np.repeat(np.array(y_val), lens_paths)
-    i=0
-
-    for folder in paths:
-        print("--- Starting - folder: {0} ---".format(os.path.basename(folder)))
-        start_time = time.time()
-        imgs = [f.path for f in os.scandir(folder) if f.is_file()]
-        for img_path in imgs:
-            # resize the image to pattern
-            img = resize_image(img_path,param.szimg) 
-            # gray scale - just one color channel
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            # minmax normalization
-            img = normalize(img) # PROBLEM CONVERT UINT8 TO FLOAT64...
-            # contour mask/filter
-            img = apply_mask(img, param.filtertype)
-            # slidding window and vetorization
-            img = slidding(img,param.pool,param.szslidwin) 
-            # binarization
-            X_mat[i,:] = img2_bin(img) # tamanho errado, seriam 32bits?            
-            print('\r Processing '+str(((i+1)*100)/N)+'% completos...' )
-            i+=1
-
-        tot_in_sec = time.time() - start_time
-        print("--- {0} seconds - folder: {1} ---".format(str(tot_in_sec), os.path.basename(folder)))
-    
-    nameout = pathout+'/'+prefix+'.npz'
-    print(nameout)
-#    np.save(nameout, bigmatrix)
-
-    np.savez_compressed(nameout,X_mat,y_mat)
-    
-    return X_mat, y_mat
-    
-   
+    if y_val != 'None':
+        
+        nameout = 'output/'+prefix+param.curr_datetime+'.npz'
+        np.savez_compressed(nameout,X_mat=X_proj,y_mat=y_mat)
+        
+    return X_proj, y_mat
