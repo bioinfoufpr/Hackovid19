@@ -233,3 +233,8 @@ def to_process(path,prefix,proj_path,param, y_val='None'):
         np.savez_compressed(nameout,X_mat=X_proj,y_mat=y_mat)
         
     return X_proj, y_mat
+
+#loaded = np.load('draft/output/RxCov10_02_07_2020_11_14_03.npz')
+#loaded.files
+#X = loaded['X_mat']
+#y = loaded['y_mat']
